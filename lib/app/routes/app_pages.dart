@@ -1,4 +1,6 @@
 
+import 'package:aia/app/modules/chat/bindings/chat_bindings.dart';
+import 'package:aia/app/modules/chat/views/chat_screen.dart';
 import 'package:aia/app/modules/onboaring/bindings/onboarding_binding.dart';
 import 'package:aia/app/modules/onboaring/views/onboarding_screen.dart';
 import 'package:aia/app/modules/splash/bindings/splash_binding.dart';
@@ -18,6 +20,11 @@ class AppPages {
       name: AppRoutes.onboarding,
       binding: OnboardingBinding(),
       page: () => const OnboardingScreen(),
+    ),
+    GetPage(
+      name: AppRoutes.chatscreen,
+      binding: ChatBindings(),
+      page: () => const ChatScreen(),
     ),
   ];
 }

@@ -1,4 +1,5 @@
 import 'package:aia/app/modules/onboaring/models/onboaring_model.dart';
+import 'package:aia/app/routes/app_routes.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -127,9 +128,7 @@ class OnboardingController extends GetxController
   }
 
   void _finishOnboarding() {
-    // Here you would navigate to your main app screen
-    debugPrint('Onboarding completed, navigating to main app');
-    // Get.offAllNamed('/home');
+    Get.offAllNamed(AppRoutes.chatscreen);
   }
 
   @override
