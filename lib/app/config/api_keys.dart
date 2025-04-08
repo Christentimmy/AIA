@@ -1,3 +1,3 @@
 
 
-const openRouterApikey = "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";
+const openRouterApikey = "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";
