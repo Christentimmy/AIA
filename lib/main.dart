@@ -3,6 +3,7 @@ import 'package:aia/app/routes/app_routes.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+
 void main() {
   runApp(const MainApp());
 }

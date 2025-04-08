@@ -2,8 +2,8 @@ class ChatModel {
   String text;
   final bool isUser;
   final DateTime timestamp;
-  final bool isTyping;
-  final bool isStreaming;
+  bool isTyping;
+  bool isStreaming;
   bool isFirstMessage;
 
   ChatModel({

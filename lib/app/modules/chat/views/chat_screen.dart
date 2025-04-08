@@ -17,6 +17,7 @@ class ChatScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.black,
       resizeToAvoidBottomInset: true,
       drawer: const BuildDrawer(),
       body: Container(
@@ -150,6 +151,8 @@ class ChatScreen extends StatelessWidget {
         ),
         itemCount: controller.messages.length,
         reverse: false,
+        controller: controller.scrollController,
+        physics: const BouncingScrollPhysics(),
         itemBuilder: (context, index) {
           final message = controller.messages[index];
           return _buildMessageItem(
@@ -208,6 +211,7 @@ class ChatScreen extends StatelessWidget {
                         message.isFirstMessage
                     ? StreamingTypewriterText(
                         text: message.text,
+                        messageModel: message,
                         textStyle: GoogleFonts.rajdhani(
                           textStyle: TextStyle(
                             color: Colors.white.withOpacity(0.9),
@@ -486,11 +490,13 @@ class BuildDrawer extends StatelessWidget {
 class StreamingTypewriterText extends StatefulWidget {
   final String text;
   final TextStyle textStyle;
+  final ChatModel messageModel;
 
   const StreamingTypewriterText({
     super.key,
     required this.text,
     required this.textStyle,
+    required this.messageModel,
   });
 
   @override
@@ -503,7 +509,8 @@ class _StreamingTypewriterTextState extends State<StreamingTypewriterText> {
   String lastText = '';
   Timer? _timer;
   int _typingPosition = 0;
-  final Duration _typingSpeed = const Duration(milliseconds: 20);
+  final Duration _typingSpeed = const Duration(milliseconds: 5);
+  final chatController = Get.find<ChatController>();
 
   @override
   void initState() {
@@ -514,9 +521,10 @@ class _StreamingTypewriterTextState extends State<StreamingTypewriterText> {
   @override
   void didUpdateWidget(StreamingTypewriterText oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // If text changed, update typing
     if (widget.text != oldWidget.text) {
       _startTyping();
+    } else {
+      widget.messageModel.isStreaming = false;
     }
   }
 
@@ -531,6 +539,8 @@ class _StreamingTypewriterTextState extends State<StreamingTypewriterText> {
           if (_typingPosition < widget.text.length) {
             _displayText = widget.text.substring(0, _typingPosition + 1);
             _typingPosition++;
+
+            chatController.scrollExtent();
           } else {
             _timer?.cancel();
           }

@@ -1,22 +1,21 @@
 import 'dart:convert';
-import 'package:aia/app/config/api_keys.dart';
+import 'package:aia/app/config/api_key.dart';
 import 'package:http/http.dart' as http;
 
 class ChatService {
   final client = http.Client();
 
   Stream<String> getAIResponseStream(String prompt) async* {
-    final url = Uri.parse("https://openrouter.ai/api/v1/chat/completions");
-
+    final url = Uri.parse(openRouterApiUrl);
     final request = http.Request('POST', url);
     request.headers.addAll({
-      'Authorization': 'Bearer $openRouterApikey',
+      'Authorization': 'Bearer $openRouterApiKey',
       'Content-Type': 'application/json',
       'Accept': 'text/event-stream',
     });
 
     request.body = jsonEncode({
-      "model": "mistralai/mistral-7b-instruct",
+      "model": openRouterApiModel,
       "messages": [
         {"role": "user", "content": prompt}
       ],
@@ -28,7 +27,7 @@ class ChatService {
       final streamedResponse = await client.send(request);
 
       if (streamedResponse.statusCode != 200) {
-        yield "Failed to get response from AI. Status code: ${streamedResponse.statusCode}";
+        yield "Failed to get response";
         return;
       }
 

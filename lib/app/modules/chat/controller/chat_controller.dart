@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 
 class ChatController extends GetxController with GetTickerProviderStateMixin {
   final TextEditingController messageController = TextEditingController();
+  ScrollController scrollController = ScrollController();
   RxString message = ''.obs;
   final FocusNode focusNode = FocusNode();
   final RxList<ChatModel> messages = <ChatModel>[].obs;
@@ -19,6 +20,7 @@ class ChatController extends GetxController with GetTickerProviderStateMixin {
   @override
   void onInit() async {
     super.onInit();
+
     // Welcome message
     messages.add(ChatModel(
       text: "Hello, I'm AIA. How can I assist you today?",
@@ -48,12 +50,18 @@ class ChatController extends GetxController with GetTickerProviderStateMixin {
     });
 
     await Future.delayed(const Duration(seconds: 2));
-
-    messages.last.isFirstMessage = false; // Set the first message flag
+    messages.listen((e) {
+      if (e.isNotEmpty) {
+        scrollExtent();
+      }
+    });
+    messages.last.isFirstMessage = false;
   }
 
   Future<void> sendMessage(String text) async {
     Stopwatch sw = Stopwatch()..start();
+    Stopwatch responseStreamSw = Stopwatch();
+
     FocusManager.instance.primaryFocus?.unfocus();
     if (text.trim().isEmpty) return;
 
@@ -66,6 +74,7 @@ class ChatController extends GetxController with GetTickerProviderStateMixin {
       timestamp: DateTime.now(),
     );
     messages.add(userMessage);
+    print("User message added. Time: ${sw.elapsedMilliseconds}ms");
 
     isLoading.value = true;
 
@@ -78,14 +87,20 @@ class ChatController extends GetxController with GetTickerProviderStateMixin {
     );
     messages.add(typingMessage);
 
+    print("Typing indicator added. Time: ${sw.elapsedMilliseconds}ms");
+
     final responseStream = ChatService().getAIResponseStream(text);
     final buffer = StringBuffer();
 
     // Flag to track if typing indicator is removed
     bool typingRemoved = false;
 
+    // Start response stream stopwatch
+    responseStreamSw.start();
+
     try {
       await for (final chunk in responseStream) {
+        print("Received chunk: $chunk");
         buffer.write(chunk);
 
         if (!typingRemoved) {
@@ -98,8 +113,15 @@ class ChatController extends GetxController with GetTickerProviderStateMixin {
           typingRemoved = true;
         }
 
+        // Update the message content as each chunk arrives
         final aiIndex = messages.length - 1;
-        messages[aiIndex] = messages[aiIndex].copyWith(text: buffer.toString());
+        messages[aiIndex] = messages[aiIndex].copyWith(
+          text: buffer.toString(),
+          isStreaming: true,
+        );
+
+        // Print the time taken to update the message (optional)
+        print("AI message updated. Time: ${sw.elapsedMilliseconds}ms");
       }
     } catch (e) {
       print("Error streaming response: $e");
@@ -114,9 +136,20 @@ class ChatController extends GetxController with GetTickerProviderStateMixin {
         timestamp: DateTime.now(),
       ));
     } finally {
+      responseStreamSw.stop();
       isLoading.value = false;
       sw.stop();
-      print("AI response time: ${sw.elapsed} ms");
+      print("Total sendMessage execution time: ${sw.elapsedMilliseconds}ms");
+    }
+  }
+
+  void scrollExtent() {
+    if (scrollController.hasClients) {
+      scrollController.animateTo(
+        scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOut,
+      );
     }
   }
 
