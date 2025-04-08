@@ -1,17 +1,19 @@
-import 'dart:async';
 import 'dart:math';
 import 'dart:ui';
 import 'package:aia/app/modules/chat/controller/chat_controller.dart';
 import 'package:aia/app/modules/chat/data/models/chat_model.dart';
 import 'package:aia/app/modules/chat/widgets/chat_background.dart';
+import 'package:aia/app/modules/chat/widgets/side_bar.dart';
+import 'package:aia/app/modules/chat/widgets/streaming_typer_text.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 class ChatScreen extends StatelessWidget {
   ChatScreen({super.key});
-
+  final FlutterTts flutterTts = FlutterTts();
   final controller = Get.find<ChatController>();
 
   @override
@@ -179,74 +181,136 @@ class ChatScreen extends StatelessWidget {
       child: Align(
         alignment:
             message.isUser ? Alignment.centerRight : Alignment.centerLeft,
-        child: Container(
-          margin: const EdgeInsets.symmetric(vertical: 8),
-          padding: const EdgeInsets.symmetric(
-            horizontal: 15,
-            vertical: 10,
-          ),
-          constraints: const BoxConstraints(maxWidth: 280),
-          decoration: BoxDecoration(
-            color: message.isUser
-                ? const Color(0xFF4FACFE)
-                : Colors.white.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: message.isUser
-                ? [
-                    BoxShadow(
-                      color: const Color(0xFF4FACFE).withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
-                : null,
-          ),
-          child: IntrinsicWidth(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Message text
-                (!message.isUser && message.isStreaming) ||
-                        message.isFirstMessage
-                    ? StreamingTypewriterText(
-                        text: message.text,
-                        messageModel: message,
-                        textStyle: GoogleFonts.rajdhani(
-                          textStyle: TextStyle(
-                            color: Colors.white.withOpacity(0.9),
-                            fontSize: 16,
-                          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 5),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 15,
+                vertical: 10,
+              ),
+              constraints: const BoxConstraints(maxWidth: 280),
+              decoration: BoxDecoration(
+                color: message.isUser
+                    ? const Color(0xFF4FACFE)
+                    : Colors.white.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: message.isUser
+                    ? [
+                        BoxShadow(
+                          color: const Color(0xFF4FACFE).withOpacity(0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
                         ),
-                      )
-                    : Text(
-                        message.text,
-                        style: GoogleFonts.rajdhani(
-                          textStyle: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
+                      ]
+                    : null,
+              ),
+              child: IntrinsicWidth(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Message text
+                    (!message.isUser && message.isStreaming.value == true) ||
+                            message.isFirstMessage
+                        ?
+                        // Obx(() => Text(
+                        //       message.streamingText?.value ?? "",
+                        //       style: GoogleFonts.rajdhani(
+                        //         textStyle: const TextStyle(
+                        //           color: Colors.white,
+                        //           fontSize: 16,
+                        //         ),
+                        //       ),
+                        //     ))
+                        StreamingTypewriterText(
+                            streamingText: message.streamingText!,
+                            messageModel: message,
+                            textStyle: GoogleFonts.rajdhani(
+                              textStyle: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                              ),
+                            ),
+                          )
+                        : Text(
+                            message.text,
+                            style: GoogleFonts.rajdhani(
+                              textStyle: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                              ),
+                            ),
                           ),
+
+                    const SizedBox(height: 4),
+
+                    // Timestamp
+                    Align(
+                      alignment: Alignment.bottomRight,
+                      child: Text(
+                        DateFormat('HH:mm').format(message.timestamp),
+                        style: TextStyle(
+                          color: message.isUser
+                              ? Colors.white.withOpacity(0.7)
+                              : Colors.white.withOpacity(0.5),
+                          fontSize: 10,
                         ),
                       ),
-
-                const SizedBox(height: 4),
-
-                // Timestamp
-                Align(
-                  alignment: Alignment.bottomRight,
-                  child: Text(
-                    DateFormat('HH:mm').format(message.timestamp),
-                    style: TextStyle(
-                      color: message.isUser
-                          ? Colors.white.withOpacity(0.7)
-                          : Colors.white.withOpacity(0.5),
-                      fontSize: 10,
                     ),
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
+            const SizedBox(height: 6),
+            Obx(() {
+              if (!message.isStreaming.value && !message.isUser) {
+                return Row(
+                  children: [
+                    InkWell(
+                      onTap: () async {
+                        if (message.isSpeaking.value) {
+                          await controller.stopSpeaking(message);
+                        } else {
+                          await controller.speak(message);
+                        }
+                      },
+                      child: Obx(() {
+                        return Icon(
+                          message.isSpeaking.value
+                              ? Icons.stop_circle
+                              : Icons.volume_up_rounded,
+                          color: Colors.grey.shade400,
+                          size: 17,
+                        );
+                      }),
+                    ),
+                    const SizedBox(width: 10),
+
+                    // Copy button
+                    InkWell(
+                      onTap: () async {
+                        await controller.copyToClipboard(message);
+                      },
+                      child: Obx(
+                        () => Icon(
+                          message.isCopied.value
+                              ? Icons.check_circle_outline
+                              : Icons.copy_rounded,
+                          color: Colors.grey.shade400,
+                          size: 17,
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              } else {
+                return const SizedBox.shrink();
+              }
+            }),
+            const SizedBox(height: 5),
+          ],
         ),
       ),
     );
@@ -412,154 +476,6 @@ class ChatScreen extends StatelessWidget {
           }),
         ],
       ),
-    );
-  }
-}
-
-class BuildDrawer extends StatelessWidget {
-  const BuildDrawer({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Drawer(
-      backgroundColor: const Color.fromARGB(255, 7, 6, 6),
-      child: ListView(
-        padding: const EdgeInsets.symmetric(
-          vertical: 50,
-          horizontal: 20,
-        ),
-        children: [
-          const SizedBox(height: 20),
-          // Title
-          Row(
-            children: [
-              Text(
-                "AIA",
-                style: GoogleFonts.orbitron(
-                  textStyle: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 25,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1,
-                  ),
-                ),
-              ),
-              const Spacer(),
-              IconButton(
-                icon: const Icon(
-                  Icons.close,
-                  color: Colors.white,
-                ),
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
-              ),
-            ],
-          ),
-
-          ListTile(
-            leading: const Icon(
-              Icons.chat_bubble,
-              color: Colors.white,
-            ),
-            contentPadding: EdgeInsets.zero,
-            title: const Text(
-              'AI Session 1',
-              style: TextStyle(color: Colors.white),
-            ),
-            onTap: () {},
-          ),
-          ListTile(
-            leading: const Icon(
-              Icons.chat_bubble_outline,
-              color: Colors.white,
-            ),
-            contentPadding: EdgeInsets.zero,
-            title: const Text(
-              'AI Session 2',
-              style: TextStyle(color: Colors.white),
-            ),
-            onTap: () {},
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class StreamingTypewriterText extends StatefulWidget {
-  final String text;
-  final TextStyle textStyle;
-  final ChatModel messageModel;
-
-  const StreamingTypewriterText({
-    super.key,
-    required this.text,
-    required this.textStyle,
-    required this.messageModel,
-  });
-
-  @override
-  _StreamingTypewriterTextState createState() =>
-      _StreamingTypewriterTextState();
-}
-
-class _StreamingTypewriterTextState extends State<StreamingTypewriterText> {
-  String _displayText = '';
-  String lastText = '';
-  Timer? _timer;
-  int _typingPosition = 0;
-  final Duration _typingSpeed = const Duration(milliseconds: 5);
-  final chatController = Get.find<ChatController>();
-
-  @override
-  void initState() {
-    super.initState();
-    _startTyping();
-  }
-
-  @override
-  void didUpdateWidget(StreamingTypewriterText oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.text != oldWidget.text) {
-      _startTyping();
-    } else {
-      widget.messageModel.isStreaming = false;
-    }
-  }
-
-  void _startTyping() {
-    lastText = widget.text;
-    _timer?.cancel();
-
-    // If we're already typing, continue from where we left off
-    if (_typingPosition < widget.text.length) {
-      _timer = Timer.periodic(_typingSpeed, (timer) {
-        setState(() {
-          if (_typingPosition < widget.text.length) {
-            _displayText = widget.text.substring(0, _typingPosition + 1);
-            _typingPosition++;
-
-            chatController.scrollExtent();
-          } else {
-            _timer?.cancel();
-          }
-        });
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      _displayText,
-      style: widget.textStyle,
     );
   }
 }

@@ -1,10 +1,13 @@
 import 'package:aia/app/modules/chat/data/models/chat_model.dart';
 import 'package:aia/app/modules/chat/data/service/chat_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:get/get.dart';
 
 class ChatController extends GetxController with GetTickerProviderStateMixin {
   final TextEditingController messageController = TextEditingController();
+  FlutterTts flutterTts = FlutterTts();
   ScrollController scrollController = ScrollController();
   RxString message = ''.obs;
   final FocusNode focusNode = FocusNode();
@@ -27,6 +30,7 @@ class ChatController extends GetxController with GetTickerProviderStateMixin {
       isUser: false,
       timestamp: DateTime.now(),
       isFirstMessage: true,
+      isStreaming: true.obs,
     ));
 
     // Setup pulse animation for AI typing indicator
@@ -56,12 +60,10 @@ class ChatController extends GetxController with GetTickerProviderStateMixin {
       }
     });
     messages.last.isFirstMessage = false;
+    messages.last.isStreaming.value = false;
   }
 
   Future<void> sendMessage(String text) async {
-    Stopwatch sw = Stopwatch()..start();
-    Stopwatch responseStreamSw = Stopwatch();
-
     FocusManager.instance.primaryFocus?.unfocus();
     if (text.trim().isEmpty) return;
 
@@ -74,9 +76,6 @@ class ChatController extends GetxController with GetTickerProviderStateMixin {
       timestamp: DateTime.now(),
     );
     messages.add(userMessage);
-    print("User message added. Time: ${sw.elapsedMilliseconds}ms");
-
-    isLoading.value = true;
 
     // Add temporary typing indicator
     final typingMessage = ChatModel(
@@ -87,59 +86,41 @@ class ChatController extends GetxController with GetTickerProviderStateMixin {
     );
     messages.add(typingMessage);
 
-    print("Typing indicator added. Time: ${sw.elapsedMilliseconds}ms");
-
     final responseStream = ChatService().getAIResponseStream(text);
-    final buffer = StringBuffer();
 
-    // Flag to track if typing indicator is removed
-    bool typingRemoved = false;
+    final aiMessage = ChatModel(
+      text: "",
+      isUser: false,
+      timestamp: DateTime.now(),
+      isStreaming: true.obs,
+      streamingText: ''.obs,
+    );
 
-    // Start response stream stopwatch
-    responseStreamSw.start();
+    bool addedAIMessage = false;
 
     try {
       await for (final chunk in responseStream) {
-        print("Received chunk: $chunk");
-        buffer.write(chunk);
-
-        if (!typingRemoved) {
-          messages.removeLast();
-          messages.add(ChatModel(
-            text: "",
-            isUser: false,
-            timestamp: DateTime.now(),
-          ));
-          typingRemoved = true;
+        if (!addedAIMessage) {
+          if (messages.isNotEmpty && messages.last.isTyping) {
+            messages.removeLast();
+          }
+          messages.add(aiMessage);
+          addedAIMessage = true;
         }
 
-        // Update the message content as each chunk arrives
-        final aiIndex = messages.length - 1;
-        messages[aiIndex] = messages[aiIndex].copyWith(
-          text: buffer.toString(),
-          isStreaming: true,
-        );
-
-        // Print the time taken to update the message (optional)
-        print("AI message updated. Time: ${sw.elapsedMilliseconds}ms");
+        aiMessage.streamingText?.value += chunk;
+        scrollExtent();
       }
+
+      // Finalize AI message
+      aiMessage.text = aiMessage.streamingText?.value ?? "";
+      aiMessage.isStreaming.value = false;
     } catch (e) {
-      print("Error streaming response: $e");
-
-      if (!typingRemoved && messages.last.isTyping) {
-        messages.removeLast();
-      }
-
       messages.add(ChatModel(
         text: "Sorry, something went wrong.",
         isUser: false,
         timestamp: DateTime.now(),
       ));
-    } finally {
-      responseStreamSw.stop();
-      isLoading.value = false;
-      sw.stop();
-      print("Total sendMessage execution time: ${sw.elapsedMilliseconds}ms");
     }
   }
 
@@ -153,8 +134,46 @@ class ChatController extends GetxController with GetTickerProviderStateMixin {
     }
   }
 
+  Future<void> speak(ChatModel message) async {
+    try {
+      flutterTts.setCompletionHandler(() {
+        message.isSpeaking.value = false;
+      });
+      await flutterTts.setLanguage("en-US");
+      await flutterTts.setPitch(1.0);
+      await flutterTts.setSpeechRate(0.5);
+      message.isSpeaking.value = true;
+      await flutterTts.awaitSpeakCompletion(true);
+      await flutterTts.speak(message.text, focus: true);
+      message.isSpeaking.value = false;
+    } catch (e) {
+      debugPrint(e.toString());
+    }
+  }
+
+  Future<void> stopSpeaking(ChatModel message) async {
+    try {
+      await flutterTts.stop();
+      message.isSpeaking.value = false;
+    } catch (e) {
+      debugPrint(e.toString());
+    }
+  }
+
+  Future<void> copyToClipboard(ChatModel message) async {
+    if (message.isCopied.value) return;
+    message.isCopied.value = true;
+    await Clipboard.setData(
+      ClipboardData(text: message.text),
+    );
+    Future.delayed(const Duration(seconds: 2), () {
+      message.isCopied.value = false;
+    });
+  }
+
   @override
   void onClose() {
+    flutterTts.stop();
     messageController.dispose();
     focusNode.dispose();
     pulseAnimationController.dispose();
