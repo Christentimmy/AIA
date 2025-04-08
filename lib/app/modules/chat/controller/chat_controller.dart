@@ -53,6 +53,7 @@ class ChatController extends GetxController with GetTickerProviderStateMixin {
   }
 
   Future<void> sendMessage(String text) async {
+    Stopwatch sw = Stopwatch()..start();
     FocusManager.instance.primaryFocus?.unfocus();
     if (text.trim().isEmpty) return;
 
@@ -66,7 +67,6 @@ class ChatController extends GetxController with GetTickerProviderStateMixin {
     );
     messages.add(userMessage);
 
-    Stopwatch sw = Stopwatch()..start();
     isLoading.value = true;
 
     // Add temporary typing indicator
@@ -80,7 +80,6 @@ class ChatController extends GetxController with GetTickerProviderStateMixin {
 
     final responseStream = ChatService().getAIResponseStream(text);
     final buffer = StringBuffer();
-    // String fullResponse = "";
 
     // Flag to track if typing indicator is removed
     bool typingRemoved = false;
@@ -105,12 +104,10 @@ class ChatController extends GetxController with GetTickerProviderStateMixin {
     } catch (e) {
       print("Error streaming response: $e");
 
-      // If typing wasn't removed yet, remove it now
       if (!typingRemoved && messages.last.isTyping) {
         messages.removeLast();
       }
 
-      // Show fallback error message
       messages.add(ChatModel(
         text: "Sorry, something went wrong.",
         isUser: false,
@@ -119,7 +116,7 @@ class ChatController extends GetxController with GetTickerProviderStateMixin {
     } finally {
       isLoading.value = false;
       sw.stop();
-      print("AI response time: ${sw.elapsedMilliseconds} ms");
+      print("AI response time: ${sw.elapsed} ms");
     }
   }
 
