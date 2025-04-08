@@ -16,9 +16,6 @@ class AppConstants {
   // Corner radius
   static const double borderRadius = 12.0;
 
-  // API base URL (example)
-  static const String baseUrl = 'https://api.echodate.me';
-
   // App-wide zIndex
   static const int overlayZIndex = 1000;
 

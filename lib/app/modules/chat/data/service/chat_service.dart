@@ -1,17 +1,16 @@
 import 'dart:convert';
+import 'package:aia/app/config/api_keys.dart';
 import 'package:http/http.dart' as http;
 
 class ChatService {
   final client = http.Client();
-  final String _apiKey =
-      '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';
 
   Stream<String> getAIResponseStream(String prompt) async* {
     final url = Uri.parse("https://openrouter.ai/api/v1/chat/completions");
 
     final request = http.Request('POST', url);
     request.headers.addAll({
-      'Authorization': 'Bearer $_apiKey',
+      'Authorization': 'Bearer $openRouterApikey',
       'Content-Type': 'application/json',
       'Accept': 'text/event-stream',
     });

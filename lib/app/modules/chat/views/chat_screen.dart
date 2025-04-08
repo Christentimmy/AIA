@@ -500,10 +500,10 @@ class StreamingTypewriterText extends StatefulWidget {
 
 class _StreamingTypewriterTextState extends State<StreamingTypewriterText> {
   String _displayText = '';
-  String _lastText = '';
+  String lastText = '';
   Timer? _timer;
   int _typingPosition = 0;
-  final Duration _typingSpeed = Duration(milliseconds: 20);
+  final Duration _typingSpeed = const Duration(milliseconds: 20);
 
   @override
   void initState() {
@@ -521,7 +521,7 @@ class _StreamingTypewriterTextState extends State<StreamingTypewriterText> {
   }
 
   void _startTyping() {
-    _lastText = widget.text;
+    lastText = widget.text;
     _timer?.cancel();
 
     // If we're already typing, continue from where we left off
