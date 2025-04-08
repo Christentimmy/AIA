@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:aia/app/modules/chat/data/models/chat_model.dart';
 import 'package:aia/app/modules/chat/data/service/chat_service.dart';
 import 'package:flutter/material.dart';
@@ -15,6 +17,7 @@ class ChatController extends GetxController with GetTickerProviderStateMixin {
   final RxBool isLoading = false.obs;
   final RxDouble animationValue = 0.0.obs;
   late AnimationController pulseAnimationController;
+  Timer? _scrollDebounceTimer;
 
   // Animation for background elements
   late AnimationController backgroundAnimController;
@@ -96,6 +99,13 @@ class ChatController extends GetxController with GetTickerProviderStateMixin {
       streamingText: ''.obs,
     );
 
+    // ever(aiMessage.streamingText, (_) {
+      // _scrollDebounceTimer?.cancel();
+      // _scrollDebounceTimer = Timer(const Duration(milliseconds: 200), () {
+      //   scrollExtent();
+      // });
+    // });
+
     bool addedAIMessage = false;
 
     try {
@@ -108,12 +118,12 @@ class ChatController extends GetxController with GetTickerProviderStateMixin {
           addedAIMessage = true;
         }
 
-        aiMessage.streamingText?.value += chunk;
-        scrollExtent();
+        aiMessage.streamingText.value += chunk;
+        // scrollExtent();
       }
 
       // Finalize AI message
-      aiMessage.text = aiMessage.streamingText?.value ?? "";
+      aiMessage.text = aiMessage.streamingText.value;
       aiMessage.isStreaming.value = false;
     } catch (e) {
       messages.add(ChatModel(
@@ -126,6 +136,7 @@ class ChatController extends GetxController with GetTickerProviderStateMixin {
 
   void scrollExtent() {
     if (scrollController.hasClients) {
+      print("scrolling to bottom");
       scrollController.animateTo(
         scrollController.position.maxScrollExtent,
         duration: const Duration(milliseconds: 150),

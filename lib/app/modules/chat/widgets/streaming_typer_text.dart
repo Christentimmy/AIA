@@ -34,7 +34,7 @@ class _StreamingTypewriterTextState extends State<StreamingTypewriterText> {
   void initState() {
     super.initState();
     _worker = ever(widget.streamingText, _onTextUpdated);
-    _onTextUpdated(widget.streamingText.value); // Initialize
+    _onTextUpdated(widget.streamingText.value);
   }
 
   void _onTextUpdated(String newText) {
@@ -47,9 +47,18 @@ class _StreamingTypewriterTextState extends State<StreamingTypewriterText> {
           _displayText += newText[_typingPosition];
           _typingPosition++;
         });
-        chatController.scrollExtent();
+        // Add periodic scrolling - only every few characters to reduce scroll calls
+        if (_typingPosition % 10 == 0) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            chatController.scrollExtent();
+          });
+        }
+        // chatController.scrollExtent();
       } else {
         timer.cancel();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          chatController.scrollExtent();
+        });
         widget.messageModel.isStreaming.value = false;
       }
     });

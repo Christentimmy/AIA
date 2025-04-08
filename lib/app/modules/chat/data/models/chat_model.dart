@@ -1,7 +1,7 @@
 import 'package:get/get.dart';
 
 class ChatModel {
-  RxString? streamingText;
+  RxString streamingText;
   String text;
   final bool isUser;
   final DateTime timestamp;
