@@ -24,7 +24,7 @@ class AppPages {
     GetPage(
       name: AppRoutes.chatscreen,
       binding: ChatBindings(),
-      page: () => const ChatScreen(),
+      page: () => ChatScreen(),
     ),
   ];
 }

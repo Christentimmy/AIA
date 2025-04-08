@@ -1,11 +1,7 @@
-
-import 'dart:math';
-
-import 'package:aia/app/modules/chat/models/chat_model.dart';
+import 'package:aia/app/modules/chat/data/models/chat_model.dart';
+import 'package:aia/app/modules/chat/data/service/chat_service.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-
-
 
 class ChatController extends GetxController with GetTickerProviderStateMixin {
   final TextEditingController messageController = TextEditingController();
@@ -15,49 +11,53 @@ class ChatController extends GetxController with GetTickerProviderStateMixin {
   final RxBool isLoading = false.obs;
   final RxDouble animationValue = 0.0.obs;
   late AnimationController pulseAnimationController;
-  
+
   // Animation for background elements
   late AnimationController backgroundAnimController;
   final RxDouble backgroundAnimValue = 0.0.obs;
 
   @override
-  void onInit() {
+  void onInit() async {
     super.onInit();
-    
     // Welcome message
     messages.add(ChatModel(
       text: "Hello, I'm AIA. How can I assist you today?",
       isUser: false,
       timestamp: DateTime.now(),
+      isFirstMessage: true,
     ));
-    
+
     // Setup pulse animation for AI typing indicator
     pulseAnimationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     )..repeat();
-    
+
     pulseAnimationController.addListener(() {
       animationValue.value = pulseAnimationController.value;
     });
-    
+
     // Setup background animation
     backgroundAnimController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 30),
     )..repeat();
-    
+
     backgroundAnimController.addListener(() {
       backgroundAnimValue.value = backgroundAnimController.value;
     });
+
+    await Future.delayed(const Duration(seconds: 2));
+
+    messages.last.isFirstMessage = false; // Set the first message flag
   }
 
   Future<void> sendMessage(String text) async {
+    FocusManager.instance.primaryFocus?.unfocus();
     if (text.trim().isEmpty) return;
-    
-    // Clear text field
+
     messageController.clear();
-    
+
     // Add user message
     final userMessage = ChatModel(
       text: text,
@@ -65,8 +65,11 @@ class ChatController extends GetxController with GetTickerProviderStateMixin {
       timestamp: DateTime.now(),
     );
     messages.add(userMessage);
-    
-    // Show AI is typing
+
+    Stopwatch sw = Stopwatch()..start();
+    isLoading.value = true;
+
+    // Add temporary typing indicator
     final typingMessage = ChatModel(
       text: "",
       isUser: false,
@@ -74,43 +77,49 @@ class ChatController extends GetxController with GetTickerProviderStateMixin {
       isTyping: true,
     );
     messages.add(typingMessage);
-    
-    // Simulate AI thinking
-    isLoading.value = true;
-    
-    // Simulate AI response delay
-    await Future.delayed(Duration(milliseconds: 500 + Random().nextInt(2000)));
-    
-    // Remove typing indicator
-    messages.removeLast();
-    
-    // Add AI response
-    final aiResponse = ChatModel(
-      text: await _generateAIResponse(text),
-      isUser: false,
-      timestamp: DateTime.now(),
-    );
-    messages.add(aiResponse);
-    
-    isLoading.value = false;
-  }
-  
-  Future<String> _generateAIResponse(String userMessage) async {
-    // This would connect to your actual AI service
-    // For now we'll use mock responses
-    
-    final lowercaseMessage = userMessage.toLowerCase();
-    
-    if (lowercaseMessage.contains("hello") || lowercaseMessage.contains("hi")) {
-      return "Hello! How can I help you today?";
-    } else if (lowercaseMessage.contains("help")) {
-      return "I'm here to assist you with information, tasks, or just conversation. What would you like to know?";
-    } else if (lowercaseMessage.contains("thank")) {
-      return "You're welcome! Feel free to ask if you need anything else.";
-    } else if (lowercaseMessage.contains("feature") || lowercaseMessage.contains("do")) {
-      return "I can answer questions, provide information, generate creative content, have thoughtful discussions, and assist with many other tasks. What are you interested in?";
-    } else {
-      return "That's an interesting point. Would you like me to elaborate more on this topic or is there something specific you're curious about?";
+
+    final responseStream = ChatService().getAIResponseStream(text);
+    final buffer = StringBuffer();
+    // String fullResponse = "";
+
+    // Flag to track if typing indicator is removed
+    bool typingRemoved = false;
+
+    try {
+      await for (final chunk in responseStream) {
+        buffer.write(chunk);
+
+        if (!typingRemoved) {
+          messages.removeLast();
+          messages.add(ChatModel(
+            text: "",
+            isUser: false,
+            timestamp: DateTime.now(),
+          ));
+          typingRemoved = true;
+        }
+
+        final aiIndex = messages.length - 1;
+        messages[aiIndex] = messages[aiIndex].copyWith(text: buffer.toString());
+      }
+    } catch (e) {
+      print("Error streaming response: $e");
+
+      // If typing wasn't removed yet, remove it now
+      if (!typingRemoved && messages.last.isTyping) {
+        messages.removeLast();
+      }
+
+      // Show fallback error message
+      messages.add(ChatModel(
+        text: "Sorry, something went wrong.",
+        isUser: false,
+        timestamp: DateTime.now(),
+      ));
+    } finally {
+      isLoading.value = false;
+      sw.stop();
+      print("AI response time: ${sw.elapsedMilliseconds} ms");
     }
   }
 
