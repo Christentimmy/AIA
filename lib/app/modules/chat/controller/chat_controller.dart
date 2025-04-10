@@ -1,70 +1,58 @@
 import 'dart:async';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:aia/app/config/constants.dart';
+import 'package:aia/app/core/utils/clipboard_helper.dart';
+import 'package:aia/app/core/widgets/snack_bar.dart';
 import 'package:aia/app/modules/chat/data/models/chat_model.dart';
 import 'package:aia/app/modules/chat/data/service/chat_service.dart';
+import 'package:aia/app/modules/chat/data/service/permission_handler.dart';
+import 'package:aia/app/modules/chat/data/service/speech_to_text_service.dart';
+import 'package:aia/app/modules/chat/data/service/text_to_speech_service.dart';
+import 'package:aia/app/modules/chat/mixin/chat_animation_mixin.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_tts/flutter_tts.dart';
 import 'package:get/get.dart';
 
-class ChatController extends GetxController with GetTickerProviderStateMixin {
+class ChatController extends GetxController
+    with GetTickerProviderStateMixin, ChatAnimationMixin {
   final TextEditingController messageController = TextEditingController();
-  FlutterTts flutterTts = FlutterTts();
-  ScrollController scrollController = ScrollController();
-  RxString message = ''.obs;
+  final ScrollController scrollController = ScrollController();
   final FocusNode focusNode = FocusNode();
+
+  final RxString message = ''.obs;
   final RxList<ChatModel> messages = <ChatModel>[].obs;
   final RxBool isLoading = false.obs;
-  late stt.SpeechToText _speech;
-  RxBool isListening = false.obs;
-  final RxDouble animationValue = 0.0.obs;
-  late AnimationController pulseAnimationController;
-  late AnimationController backgroundAnimController;
-  final RxDouble backgroundAnimValue = 0.0.obs;
+  final RxBool isListening = false.obs;
+  final RxBool autoScroll = true.obs;
+  var userScrolledManually = false.obs;
+  bool userScrolledUp = false;
+
+  final speechService = SpeechToTextService();
+  final ttsService = TextToSpeechService();
+  final permissionService = PermissionService();
 
   @override
   void onInit() async {
     super.onInit();
-    _speech = stt.SpeechToText();
-
-    // Welcome message
-    messages.add(ChatModel(
-      text: "Hello, I'm AIA. How can I assist you today?",
-      isUser: false,
-      timestamp: DateTime.now(),
-      isFirstMessage: true,
-      isStreaming: true.obs,
-    ));
-
-    // Setup pulse animation for AI typing indicator
-    pulseAnimationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    )..repeat();
-
-    pulseAnimationController.addListener(() {
-      animationValue.value = pulseAnimationController.value;
-    });
-
-    // Setup background animation
-    backgroundAnimController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 30),
-    )..repeat();
-
-    backgroundAnimController.addListener(() {
-      backgroundAnimValue.value = backgroundAnimController.value;
-    });
-
-    await Future.delayed(const Duration(seconds: 2));
-    messages.listen((e) {
-      if (e.isNotEmpty) {
-        scrollExtent();
-      }
-    });
+    messages.add(AppConstants.defaultChatMessage);
+    messages.listen((_) => scrollExtent());
     messages.last.isFirstMessage = false;
     messages.last.isStreaming.value = false;
+
+    initAnimations(this);
+  }
+
+  void listenForUserScroll() {
+    scrollController.addListener(() {
+      final atBottom = scrollController.position.pixels >=
+          scrollController.position.maxScrollExtent - 50;
+      if (!atBottom) {
+        userScrolledUp = true;
+      } else {
+        userScrolledUp = false;
+      }
+      if (!userScrolledUp) {
+        autoScroll.value = true;
+      }
+    });
   }
 
   Future<void> sendMessage(String text) async {
@@ -74,15 +62,19 @@ class ChatController extends GetxController with GetTickerProviderStateMixin {
     messageController.clear();
     message.value = "";
 
-    // Add user message
+    await Future.delayed(const Duration(milliseconds: 100));
+    autoScroll.value = true;
+
     final userMessage = ChatModel(
       text: text,
       isUser: true,
       timestamp: DateTime.now(),
     );
+
     messages.add(userMessage);
 
-    // Add temporary typing indicator
+    scrollExtent();
+
     final typingMessage = ChatModel(
       text: "",
       isUser: false,
@@ -101,13 +93,6 @@ class ChatController extends GetxController with GetTickerProviderStateMixin {
       streamingText: ''.obs,
     );
 
-    // ever(aiMessage.streamingText, (_) {
-    // _scrollDebounceTimer?.cancel();
-    // _scrollDebounceTimer = Timer(const Duration(milliseconds: 200), () {
-    //   scrollExtent();
-    // });
-    // });
-
     bool addedAIMessage = false;
 
     try {
@@ -117,6 +102,7 @@ class ChatController extends GetxController with GetTickerProviderStateMixin {
             messages.removeLast();
           }
           messages.add(aiMessage);
+          // scrollExtent();
           addedAIMessage = true;
         }
 
@@ -124,7 +110,6 @@ class ChatController extends GetxController with GetTickerProviderStateMixin {
         // scrollExtent();
       }
 
-      // Finalize AI message
       aiMessage.text = aiMessage.streamingText.value;
       aiMessage.isStreaming.value = false;
     } catch (e) {
@@ -137,8 +122,7 @@ class ChatController extends GetxController with GetTickerProviderStateMixin {
   }
 
   void scrollExtent() {
-    if (scrollController.hasClients) {
-      print("scrolling to bottom");
+    if (scrollController.hasClients && autoScroll.value && !userScrolledUp) {
       scrollController.animateTo(
         scrollController.position.maxScrollExtent,
         duration: const Duration(milliseconds: 150),
@@ -149,36 +133,29 @@ class ChatController extends GetxController with GetTickerProviderStateMixin {
 
   Future<void> speak(ChatModel message) async {
     try {
-      flutterTts.setCompletionHandler(() {
-        message.isSpeaking.value = false;
-      });
-      await flutterTts.setLanguage("en-US");
-      await flutterTts.setPitch(1.0);
-      await flutterTts.setSpeechRate(0.5);
       message.isSpeaking.value = true;
-      await flutterTts.awaitSpeakCompletion(true);
-      await flutterTts.speak(message.text, focus: true);
+      await ttsService.speak(text: message.text);
       message.isSpeaking.value = false;
     } catch (e) {
-      debugPrint(e.toString());
+      debugPrint("TTS Error: ${e.toString()}");
     }
   }
 
   Future<void> stopSpeaking(ChatModel message) async {
     try {
-      await flutterTts.stop();
+      await ttsService.stop();
       message.isSpeaking.value = false;
     } catch (e) {
-      debugPrint(e.toString());
+      debugPrint("TTS Stop Error: ${e.toString()}");
     }
   }
 
   Future<void> copyToClipboard(ChatModel message) async {
     if (message.isCopied.value) return;
     message.isCopied.value = true;
-    await Clipboard.setData(
-      ClipboardData(text: message.text),
-    );
+
+    await ClipboardHelper.copyToClipboard(message.text);
+
     Future.delayed(const Duration(seconds: 2), () {
       message.isCopied.value = false;
     });
@@ -190,79 +167,51 @@ class ChatController extends GetxController with GetTickerProviderStateMixin {
       messageController.clear();
       message.value = "";
     }
-    var micStatus = await Permission.microphone.status;
-    if (!micStatus.isGranted) {
-      micStatus = await Permission.microphone.request();
-      if (!micStatus.isGranted) {
-        return;
-      }
-    }
+
+    final hasPermission = await permissionService.requestMicrophonePermission();
+    if (!hasPermission) return;
+
     if (!isListening.value) {
-      bool available = await _speech.initialize(
-        onStatus: (val) async {
-          if (val == 'done') {
-            isListening.value = false;
-          }
-          if (val == 'notListening' && isListening.value) {
-            // final shouldShow =
-            //     await Get.find<StorageController>().getShowMicToast();
-            // if (shouldShow) {
-            //   CherryToast.info(
-            //     textDirection: TextDirection.ltr,
-            //     toastPosition: Position.bottom,
-              
-            //     title: const Text(
-            //       "User added",
-            //       style: TextStyle(color: Colors.black),
-            //     ),
-            //     action: const Text(
-            //       "Display information",
-            //       style: TextStyle(color: Colors.black),
-            //     ),
-            //     actionHandler: () async {
-            //       await Get.find<StorageController>().setShowMicToast(false);
-            //       Get.back();
-            //       print("Action button pressed");
-            //     },
-            //   ).show(Get.context!);
-            // }
-          }
+      final available = await speechService.initialize(
+        onStatus: (status) {
+          if (status == 'done') isListening.value = false;
         },
-        onError: (val) => print('Error: $val'),
-        debugLogging: true,
+        onError: (error) {
+          SnackbarHelper.showWarning(error.errorMsg);
+          isListening.value = false;
+        },
       );
 
       if (available) {
         isListening.value = true;
-        _speech.listen(
-          onResult: (val) {
-            messageController.text = val.recognizedWords;
-            message.value = val.recognizedWords;
-          },
-          listenFor: const Duration(hours: 5),
-          pauseFor: const Duration(hours: 2),
-        );
+        speechService.listen((recognizedText) {
+          messageController.text = recognizedText;
+          message.value = recognizedText;
+        });
       }
     } else {
-      isListening.value = false;
-      _speech.stop();
+      stopListening();
     }
   }
 
   void stopListening() {
     if (isListening.value) {
       isListening.value = false;
-      _speech.stop();
+      speechService.stop();
     }
+  }
+
+  void newChat() {
+    messages.clear();
+    messages.add(AppConstants.defaultChatMessage);
   }
 
   @override
   void onClose() {
-    flutterTts.stop();
+    ttsService.stop();
     messageController.dispose();
     focusNode.dispose();
-    pulseAnimationController.dispose();
-    backgroundAnimController.dispose();
+    disposeAnimations();
     super.onClose();
   }
 }

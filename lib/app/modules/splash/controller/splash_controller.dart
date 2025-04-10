@@ -185,7 +185,6 @@ class SplashController extends GetxController with GetTickerProviderStateMixin {
 
   Future<void> _navigateToNextScreen() async {
     bool status = await _storageController.getUserStatus();
-    print(status);
     if (status) {
       Get.offAllNamed(AppRoutes.chatscreen);
     } else {
