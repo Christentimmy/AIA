@@ -13,6 +13,7 @@ const SplashScreen({super.key});
     // Use GetX controller
     final SplashController controller = Get.find<SplashController>();
     
+    
     return Scaffold(
       backgroundColor: const Color(0xFF050A18), 
       body: Stack(

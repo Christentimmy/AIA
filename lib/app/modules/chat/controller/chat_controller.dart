@@ -1,5 +1,6 @@
 import 'dart:async';
-
+import 'package:permission_handler/permission_handler.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:aia/app/modules/chat/data/models/chat_model.dart';
 import 'package:aia/app/modules/chat/data/service/chat_service.dart';
 import 'package:flutter/material.dart';
@@ -15,17 +16,17 @@ class ChatController extends GetxController with GetTickerProviderStateMixin {
   final FocusNode focusNode = FocusNode();
   final RxList<ChatModel> messages = <ChatModel>[].obs;
   final RxBool isLoading = false.obs;
+  late stt.SpeechToText _speech;
+  RxBool isListening = false.obs;
   final RxDouble animationValue = 0.0.obs;
   late AnimationController pulseAnimationController;
-  Timer? _scrollDebounceTimer;
-
-  // Animation for background elements
   late AnimationController backgroundAnimController;
   final RxDouble backgroundAnimValue = 0.0.obs;
 
   @override
   void onInit() async {
     super.onInit();
+    _speech = stt.SpeechToText();
 
     // Welcome message
     messages.add(ChatModel(
@@ -71,6 +72,7 @@ class ChatController extends GetxController with GetTickerProviderStateMixin {
     if (text.trim().isEmpty) return;
 
     messageController.clear();
+    message.value = "";
 
     // Add user message
     final userMessage = ChatModel(
@@ -100,10 +102,10 @@ class ChatController extends GetxController with GetTickerProviderStateMixin {
     );
 
     // ever(aiMessage.streamingText, (_) {
-      // _scrollDebounceTimer?.cancel();
-      // _scrollDebounceTimer = Timer(const Duration(milliseconds: 200), () {
-      //   scrollExtent();
-      // });
+    // _scrollDebounceTimer?.cancel();
+    // _scrollDebounceTimer = Timer(const Duration(milliseconds: 200), () {
+    //   scrollExtent();
+    // });
     // });
 
     bool addedAIMessage = false;
@@ -180,6 +182,78 @@ class ChatController extends GetxController with GetTickerProviderStateMixin {
     Future.delayed(const Duration(seconds: 2), () {
       message.isCopied.value = false;
     });
+  }
+
+  Future<void> listen() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    if (messageController.text.isNotEmpty) {
+      messageController.clear();
+      message.value = "";
+    }
+    var micStatus = await Permission.microphone.status;
+    if (!micStatus.isGranted) {
+      micStatus = await Permission.microphone.request();
+      if (!micStatus.isGranted) {
+        return;
+      }
+    }
+    if (!isListening.value) {
+      bool available = await _speech.initialize(
+        onStatus: (val) async {
+          if (val == 'done') {
+            isListening.value = false;
+          }
+          if (val == 'notListening' && isListening.value) {
+            // final shouldShow =
+            //     await Get.find<StorageController>().getShowMicToast();
+            // if (shouldShow) {
+            //   CherryToast.info(
+            //     textDirection: TextDirection.ltr,
+            //     toastPosition: Position.bottom,
+              
+            //     title: const Text(
+            //       "User added",
+            //       style: TextStyle(color: Colors.black),
+            //     ),
+            //     action: const Text(
+            //       "Display information",
+            //       style: TextStyle(color: Colors.black),
+            //     ),
+            //     actionHandler: () async {
+            //       await Get.find<StorageController>().setShowMicToast(false);
+            //       Get.back();
+            //       print("Action button pressed");
+            //     },
+            //   ).show(Get.context!);
+            // }
+          }
+        },
+        onError: (val) => print('Error: $val'),
+        debugLogging: true,
+      );
+
+      if (available) {
+        isListening.value = true;
+        _speech.listen(
+          onResult: (val) {
+            messageController.text = val.recognizedWords;
+            message.value = val.recognizedWords;
+          },
+          listenFor: const Duration(hours: 5),
+          pauseFor: const Duration(hours: 2),
+        );
+      }
+    } else {
+      isListening.value = false;
+      _speech.stop();
+    }
+  }
+
+  void stopListening() {
+    if (isListening.value) {
+      isListening.value = false;
+      _speech.stop();
+    }
   }
 
   @override

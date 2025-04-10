@@ -1,3 +1,4 @@
+import 'package:aia/app/bindings/app_bindings.dart';
 import 'package:aia/app/routes/app_pages.dart';
 import 'package:aia/app/routes/app_routes.dart';
 import 'package:flutter/material.dart';
@@ -19,6 +20,7 @@ class MainApp extends StatelessWidget {
       getPages: AppPages.pages,
       debugShowCheckedModeBanner: false,
       defaultTransition: Transition.fadeIn,
+      initialBinding: AppBindings(),
     );
   }
 }

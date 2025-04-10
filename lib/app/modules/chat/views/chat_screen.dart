@@ -10,6 +10,7 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:lottie/lottie.dart';
 
 class ChatScreen extends StatelessWidget {
   ChatScreen({super.key});
@@ -39,26 +40,64 @@ class ChatScreen extends StatelessWidget {
             Positioned.fill(
               child: Obx(
                 () => _buildBackgroundEffects(
-                    controller.backgroundAnimValue.value),
+                  controller.backgroundAnimValue.value,
+                ),
               ),
             ),
 
-            SafeArea(
-              child: Column(
-                children: [
-                  // App bar
-                  _buildAppBar(),
+            Obx(
+              () => Opacity(
+                opacity: controller.isListening.value ? 0.1 : 1.0,
+                child: SafeArea(
+                  child: Column(
+                    children: [
+                      // App bar
+                      _buildAppBar(),
 
-                  // Chat messages
-                  Expanded(
-                    child: _buildMessagesList(controller),
+                      // Chat messages
+                      Expanded(
+                        child: _buildMessagesList(controller),
+                      ),
+
+                      // Input area
+                      _buildInputArea(controller),
+                    ],
                   ),
-
-                  // Input area
-                  _buildInputArea(controller),
-                ],
+                ),
               ),
             ),
+
+            Obx(
+              () => controller.isListening.value
+                  ? InkWell(
+                      onTap: () {
+                        controller.stopListening();
+                      },
+                      child: SizedBox(
+                          height: Get.height,
+                          width: Get.width,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              Lottie.asset(
+                                'assets/images/alt.json',
+                                repeat: true,
+                                width: 200,
+                                height: 200,
+                                addRepaintBoundary: true,
+                                fit: BoxFit.cover,
+                              ),
+                              const Text(
+                                "Tap to cancel",
+                                style: TextStyle(
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          )),
+                    )
+                  : const SizedBox.shrink(),
+            )
           ],
         ),
       ),
@@ -225,7 +264,7 @@ class ChatScreen extends StatelessWidget {
                         //       ),
                         //     ))
                         StreamingTypewriterText(
-                            streamingText: message.streamingText!,
+                            streamingText: message.streamingText,
                             messageModel: message,
                             textStyle: GoogleFonts.rajdhani(
                               textStyle: const TextStyle(
@@ -442,9 +481,19 @@ class ChatScreen extends StatelessWidget {
             if (isLoading) {
               icon = const Icon(Icons.hourglass_bottom, color: Colors.white);
               onPressed = null;
-            } else if (isTextEmpty) {
+            } else if (isTextEmpty && !controller.isListening.value) {
               icon = Icon(Icons.mic, color: Colors.white.withOpacity(0.8));
-              onPressed = () {};
+              onPressed = () async {
+                await controller.listen();
+              };
+            } else if (isTextEmpty && controller.isListening.value) {
+              icon = Icon(Icons.mic_off, color: Colors.white.withOpacity(0.8));
+              onPressed = () {
+                controller.stopListening();
+              };
+            } else if (isTextEmpty) {
+              icon = const Icon(Icons.mic, color: Colors.white);
+              onPressed = null;
             } else {
               icon = const Icon(Icons.send, color: Colors.white);
               onPressed = () {
